@@ -1,0 +1,1481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>[PROJECT NAME] Architecture Diagram</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background: #020617;
+            min-height: 100vh;
+            padding: 2rem;
+            color: white;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            margin-bottom: 2rem;
+        }
+
+        .header-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .pulse-dot {
+            width: 12px;
+            height: 12px;
+            background: #22d3ee;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: -0.025em;
+        }
+
+        .subtitle {
+            color: #94a3b8;
+            font-size: 0.875rem;
+            margin-left: 1.75rem;
+        }
+
+        .diagram-container {
+            background: rgba(15, 23, 42, 0.5);
+            border-radius: 1rem;
+            border: 1px solid #1e293b;
+            padding: 1.5rem;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        .diagram-container > svg {
+            width: 100%;
+            min-width: 900px;
+            display: block;
+        }
+
+        /* ============ Floating Toolbar ============ */
+        .toolbar-fab {
+            position: absolute;
+            top: 0.75rem;
+            right: 0.75rem;
+            z-index: 10;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid #334155;
+            color: #64748b;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            padding: 0;
+            font-size: 0;
+        }
+
+        .toolbar-fab:hover {
+            background: rgba(51, 65, 85, 0.9);
+            color: #e2e8f0;
+            border-color: #64748b;
+        }
+
+        .toolbar-fab.open {
+            background: rgba(34, 211, 238, 0.15);
+            border-color: #22d3ee;
+            color: #22d3ee;
+        }
+
+        .toolbar-panel {
+            display: none;
+            position: absolute;
+            top: 0.75rem;
+            right: 3.25rem;
+            z-index: 10;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.6rem;
+            background: rgba(15, 23, 42, 0.95);
+            border-radius: 0.5rem;
+            border: 1px solid #334155;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            backdrop-filter: blur(8px);
+        }
+
+        .toolbar-panel.visible {
+            display: flex;
+        }
+
+        .toolbar-panel button {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 0.375rem;
+            border: 1px solid #475569;
+            background: rgba(51, 65, 85, 0.6);
+            color: #e2e8f0;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .toolbar-panel button:hover {
+            background: rgba(71, 85, 105, 0.8);
+            border-color: #64748b;
+        }
+
+        .toolbar-panel button.active {
+            background: rgba(34, 211, 238, 0.2);
+            border-color: #22d3ee;
+            color: #22d3ee;
+        }
+
+        .toolbar-panel .hint {
+            color: #475569;
+            font-size: 0.65rem;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .toolbar-panel .hint.visible {
+            color: #94a3b8;
+        }
+
+        /* Edit mode node highlighting */
+        .diagram-container > svg.edit-mode .node:hover {
+            filter: brightness(1.3);
+            cursor: grab;
+        }
+
+        svg.edit-mode .node.dragging {
+            filter: brightness(1.5);
+            cursor: grabbing;
+        }
+
+        svg.edit-mode .node.dragging rect {
+            stroke-width: 2.5;
+        }
+
+        /* Connection endpoint handles */
+        svg.edit-mode .conn-handle {
+            cursor: crosshair;
+            transition: opacity 0.15s;
+        }
+
+        svg.edit-mode .conn-handle:hover {
+            fill: #67e8f9;
+        }
+
+        /* Snap indicator */
+        svg.edit-mode .snap-indicator {
+            fill: #22d3ee;
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        /* Hover highlight on connections */
+        svg.edit-mode .connection:hover path {
+            filter: brightness(1.5);
+        }
+
+        /* Boundary dragging */
+        svg.edit-mode .boundary:hover {
+            stroke-width: 2;
+            cursor: grab;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        .card {
+            background: rgba(15, 23, 42, 0.5);
+            border-radius: 0.75rem;
+            border: 1px solid #1e293b;
+            padding: 1.25rem;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .card-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .card-dot.cyan { background: #22d3ee; }
+        .card-dot.emerald { background: #34d399; }
+        .card-dot.violet { background: #a78bfa; }
+        .card-dot.amber { background: #fbbf24; }
+        .card-dot.rose { background: #fb7185; }
+
+        .card h3 {
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .card ul {
+            list-style: none;
+            color: #94a3b8;
+            font-size: 0.75rem;
+        }
+
+        .card li {
+            margin-bottom: 0.375rem;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 1.5rem;
+            color: #475569;
+            font-size: 0.75rem;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <!-- Header -->
+    <div class="header">
+        <div class="header-row">
+            <div class="pulse-dot"></div>
+            <h1>[PROJECT NAME] Architecture</h1>
+        </div>
+        <p class="subtitle">[Subtitle description]</p>
+    </div>
+
+    <!-- Main Diagram -->
+    <div class="diagram-container">
+        <!-- Floating toolbar -->
+        <button class="toolbar-fab" id="toolbar-fab" title="Tools">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="3" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="13" r="1.5"/></svg>
+        </button>
+        <div class="toolbar-panel" id="toolbar-panel">
+            <button id="edit-toggle">Edit</button>
+            <button id="export-btn">Export PNG</button>
+            <button id="save-btn">Save HTML</button>
+            <button id="reset-btn">Reset</button>
+            <span class="hint" id="edit-hint"></span>
+        </div>
+        <svg viewBox="0 0 1000 680">
+            <!-- Definitions -->
+            <defs>
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+                </marker>
+                <marker id="arrowhead-cyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee" />
+                </marker>
+                <marker id="arrowhead-emerald" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#34d399" />
+                </marker>
+                <marker id="arrowhead-violet" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa" />
+                </marker>
+                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+                </pattern>
+            </defs>
+
+            <!-- Background Grid -->
+            <rect width="100%" height="100%" fill="url(#grid)" />
+
+            <!-- =================================================================
+                 CONNECTION ARROWS (drawn first, behind nodes)
+                 ================================================================= -->
+
+            <!-- Users -> CloudFront -->
+            <g class="connection" data-from="users" data-to="cloudfront" data-waypoints='[{"x":130,"y":305},{"x":198,"y":305}]'>
+                <path d="M 130 305 L 198 305" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+                <text x="164" y="299" fill="#94a3b8" font-size="9" text-anchor="middle">HTTPS</text>
+            </g>
+
+            <!-- CloudFront -> LoadBalancer -->
+            <g class="connection" data-from="cloudfront" data-to="loadbalancer" data-waypoints='[{"x":310,"y":305},{"x":358,"y":305}]'>
+                <path d="M 310 305 L 358 305" fill="none" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+            </g>
+
+            <!-- CloudFront -> S3 -->
+            <g class="connection" data-from="cloudfront" data-to="s3" data-waypoints='[{"x":255,"y":330},{"x":255,"y":378}]'>
+                <path d="M 255 330 L 255 378" fill="none" stroke="#fbbf24" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+                <text x="270" y="358" fill="#94a3b8" font-size="9">OAI</text>
+            </g>
+
+            <!-- LoadBalancer -> API -->
+            <g class="connection" data-from="loadbalancer" data-to="api" data-waypoints='[{"x":460,"y":305},{"x":508,"y":305}]'>
+                <path d="M 460 305 L 508 305" fill="none" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+            </g>
+
+            <!-- API -> Database -->
+            <g class="connection" data-from="api" data-to="database" data-waypoints='[{"x":620,"y":305},{"x":698,"y":305}]'>
+                <path d="M 620 305 L 698 305" fill="none" stroke="#a78bfa" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+                <text x="655" y="299" fill="#94a3b8" font-size="9">TLS</text>
+            </g>
+
+            <!-- Auth flow (dashed curve) -->
+            <g class="connection" data-from="auth" data-to="cloudfront" data-waypoints='[{"x":80,"y":140},{"x":80,"y":210},{"x":220,"y":210},{"x":220,"y":278}]'>
+                <path d="M 80 140 C 80 163.3 80 186.7 80 210 C 80 233.3 150 210 220 210 C 220 210 220 232.7 220 278" fill="none" stroke="#fb7185" stroke-width="1.5" stroke-dasharray="5,5"/>
+                <text x="150" y="200" fill="#fb7185" font-size="8">JWT + PKCE</text>
+            </g>
+
+            <!-- =================================================================
+                 NODES (drawn after arrows, above them)
+                 ================================================================= -->
+
+            <!-- External: Users -->
+            <g class="node" data-id="users">
+                <rect x="30" y="280" width="100" height="50" rx="6" fill="#0f172a"/>
+                <rect x="30" y="280" width="100" height="50" rx="6" fill="rgba(30, 41, 59, 0.5)" stroke="#94a3b8" stroke-width="1.5"/>
+                <text x="80" y="300" fill="white" font-size="11" font-weight="600" text-anchor="middle">Users</text>
+                <text x="80" y="316" fill="#94a3b8" font-size="9" text-anchor="middle">Browser/Mobile</text>
+            </g>
+
+            <!-- Security: Auth Provider -->
+            <g class="node" data-id="auth">
+                <rect x="30" y="80" width="100" height="60" rx="6" fill="#0f172a"/>
+                <rect x="30" y="80" width="100" height="60" rx="6" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1.5"/>
+                <text x="80" y="105" fill="white" font-size="11" font-weight="600" text-anchor="middle">Auth Provider</text>
+                <text x="80" y="121" fill="#94a3b8" font-size="9" text-anchor="middle">OAuth 2.0</text>
+            </g>
+
+            <!-- Region Boundary -->
+            <g class="boundary" data-id="region">
+                <rect x="160" y="40" width="820" height="620" rx="12" fill="rgba(251, 191, 36, 0.05)" stroke="#fbbf24" stroke-width="1" stroke-dasharray="8,4"/>
+                <text x="172" y="58" fill="#fbbf24" font-size="10" font-weight="600">AWS Region: us-west-2</text>
+            </g>
+
+            <!-- Cloud: CloudFront -->
+            <g class="node" data-id="cloudfront">
+                <rect x="200" y="280" width="110" height="50" rx="6" fill="#0f172a"/>
+                <rect x="200" y="280" width="110" height="50" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+                <text x="255" y="300" fill="white" font-size="11" font-weight="600" text-anchor="middle">CloudFront</text>
+                <text x="255" y="316" fill="#94a3b8" font-size="9" text-anchor="middle">CDN</text>
+            </g>
+
+            <!-- Cloud: S3 Buckets -->
+            <g class="node" data-id="s3">
+                <rect x="200" y="380" width="110" height="100" rx="6" fill="#0f172a"/>
+                <rect x="200" y="380" width="110" height="100" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+                <text x="255" y="400" fill="white" font-size="11" font-weight="600" text-anchor="middle">S3 Buckets</text>
+                <text x="255" y="420" fill="#94a3b8" font-size="8" text-anchor="middle">• bucket-one</text>
+                <text x="255" y="434" fill="#94a3b8" font-size="8" text-anchor="middle">• bucket-two</text>
+                <text x="255" y="448" fill="#94a3b8" font-size="8" text-anchor="middle">• bucket-three</text>
+                <text x="255" y="466" fill="#fbbf24" font-size="7" text-anchor="middle">OAI Protected</text>
+            </g>
+
+            <!-- Security Group -->
+            <g class="boundary" data-id="sg-lb">
+                <rect x="350" y="265" width="120" height="80" rx="8" fill="transparent" stroke="#fb7185" stroke-width="1" stroke-dasharray="4,4"/>
+                <text x="358" y="279" fill="#fb7185" font-size="8">sg-name :port</text>
+            </g>
+
+            <!-- Cloud: Load Balancer -->
+            <g class="node" data-id="loadbalancer">
+                <rect x="360" y="280" width="100" height="50" rx="6" fill="#0f172a"/>
+                <rect x="360" y="280" width="100" height="50" rx="6" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1.5"/>
+                <text x="410" y="300" fill="white" font-size="11" font-weight="600" text-anchor="middle">Load Balancer</text>
+                <text x="410" y="316" fill="#94a3b8" font-size="9" text-anchor="middle">HTTPS :443</text>
+            </g>
+
+            <!-- Backend: API Server -->
+            <g class="node" data-id="api">
+                <rect x="510" y="280" width="110" height="50" rx="6" fill="#0f172a"/>
+                <rect x="510" y="280" width="110" height="50" rx="6" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1.5"/>
+                <text x="565" y="300" fill="white" font-size="11" font-weight="600" text-anchor="middle">API Server</text>
+                <text x="565" y="316" fill="#94a3b8" font-size="9" text-anchor="middle">FastAPI :8000</text>
+            </g>
+
+            <!-- Database -->
+            <g class="node" data-id="database">
+                <rect x="700" y="280" width="120" height="50" rx="6" fill="#0f172a"/>
+                <rect x="700" y="280" width="120" height="50" rx="6" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+                <text x="760" y="300" fill="white" font-size="11" font-weight="600" text-anchor="middle">Database</text>
+                <text x="760" y="316" fill="#94a3b8" font-size="9" text-anchor="middle">PostgreSQL</text>
+            </g>
+
+            <!-- Frontend -->
+            <g class="node" data-id="frontend">
+                <rect x="200" y="520" width="200" height="110" rx="8" fill="#0f172a"/>
+                <rect x="200" y="520" width="200" height="110" rx="8" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+                <text x="300" y="545" fill="white" font-size="12" font-weight="600" text-anchor="middle">Frontend</text>
+                <text x="300" y="565" fill="#94a3b8" font-size="9" text-anchor="middle">React + TypeScript</text>
+                <text x="300" y="580" fill="#94a3b8" font-size="9" text-anchor="middle">Additional detail</text>
+                <text x="300" y="595" fill="#94a3b8" font-size="9" text-anchor="middle">More info</text>
+                <text x="300" y="615" fill="#22d3ee" font-size="8" text-anchor="middle">domain.example.com</text>
+            </g>
+
+            <!-- =================================================================
+                 LEGEND
+                 ================================================================= -->
+            <g class="legend">
+                <text x="720" y="70" fill="white" font-size="10" font-weight="600">Legend</text>
+
+                <rect x="720" y="82" width="16" height="10" rx="2" fill="rgba(8, 51, 68, 0.4)" stroke="#22d3ee" stroke-width="1"/>
+                <text x="742" y="90" fill="#94a3b8" font-size="8">Frontend</text>
+
+                <rect x="720" y="98" width="16" height="10" rx="2" fill="rgba(6, 78, 59, 0.4)" stroke="#34d399" stroke-width="1"/>
+                <text x="742" y="106" fill="#94a3b8" font-size="8">Backend</text>
+
+                <rect x="720" y="114" width="16" height="10" rx="2" fill="rgba(120, 53, 15, 0.3)" stroke="#fbbf24" stroke-width="1"/>
+                <text x="742" y="122" fill="#94a3b8" font-size="8">Cloud Service</text>
+
+                <rect x="720" y="130" width="16" height="10" rx="2" fill="rgba(76, 29, 149, 0.4)" stroke="#a78bfa" stroke-width="1"/>
+                <text x="742" y="138" fill="#94a3b8" font-size="8">Database</text>
+
+                <rect x="720" y="146" width="16" height="10" rx="2" fill="rgba(136, 19, 55, 0.4)" stroke="#fb7185" stroke-width="1"/>
+                <text x="742" y="154" fill="#94a3b8" font-size="8">Security</text>
+
+                <path d="M 720 168 L 736 168" fill="none" stroke="#fb7185" stroke-width="1" stroke-dasharray="3,3"/>
+                <text x="742" y="171" fill="#94a3b8" font-size="8">Auth Flow</text>
+
+                <rect x="720" y="178" width="16" height="10" rx="2" fill="transparent" stroke="#fb7185" stroke-width="1" stroke-dasharray="3,3"/>
+                <text x="742" y="186" fill="#94a3b8" font-size="8">Security Group</text>
+            </g>
+        </svg>
+    </div>
+
+    <!-- Info Cards -->
+    <div class="cards">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-dot rose"></div>
+                <h3>Card Title 1</h3>
+            </div>
+            <ul>
+                <li>• Item one</li>
+                <li>• Item two</li>
+                <li>• Item three</li>
+                <li>• Item four</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-dot amber"></div>
+                <h3>Card Title 2</h3>
+            </div>
+            <ul>
+                <li>• Item one</li>
+                <li>• Item two</li>
+                <li>• Item three</li>
+                <li>• Item four</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-dot violet"></div>
+                <h3>Card Title 3</h3>
+            </div>
+            <ul>
+                <li>• Item one</li>
+                <li>• Item two</li>
+                <li>• Item three</li>
+                <li>• Item four</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <p class="footer">
+        [Project Name] • [Additional metadata]
+    </p>
+</div>
+
+<script>
+(function() {
+    const svg = document.querySelector('.diagram-container > svg');
+    if (!svg) return;
+
+    const editBtn = document.getElementById('edit-toggle');
+    const saveBtn = document.getElementById('save-btn');
+    const resetBtn = document.getElementById('reset-btn');
+    const exportBtn = document.getElementById('export-btn');
+    const hint = document.getElementById('edit-hint');
+    const fab = document.getElementById('toolbar-fab');
+    const panel = document.getElementById('toolbar-panel');
+
+    let editMode = false;
+    let dragTarget = null;
+    let dragType = null; // 'node', 'boundary', 'conn-handle', 'conn-body'
+    let dragOffset = { x: 0, y: 0 };
+    let dragConnLine = null;
+    let initialState = null;
+    let snapIndicator = null;
+
+    const SNAP_DISTANCE = 20;
+    const UNDO_LIMIT = 3;
+    let undoStack = [];
+
+    initialState = svg.innerHTML;
+
+    // ========== Undo ==========
+    function pushUndo() {
+        undoStack.push(svg.innerHTML);
+        if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+    }
+
+    function popUndo() {
+        if (undoStack.length === 0) return;
+        const state = undoStack.pop();
+        svg.innerHTML = state;
+        if (editMode) {
+            svg.classList.add('edit-mode');
+            addConnHandles();
+        }
+    }
+
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+            e.preventDefault();
+            popUndo();
+        }
+    });
+
+    // ========== Snap-to-node helpers ==========
+    function getNodeBBox(nodeEl) {
+        const t = getTranslate(nodeEl);
+        const rect = nodeEl.querySelector('rect:last-of-type') || nodeEl.querySelector('rect');
+        if (!rect) return null;
+        const x = parseFloat(rect.getAttribute('x')) + t.x;
+        const y = parseFloat(rect.getAttribute('y')) + t.y;
+        const w = parseFloat(rect.getAttribute('width'));
+        const h = parseFloat(rect.getAttribute('height'));
+        return { x, y, w, h, cx: x + w / 2, cy: y + h / 2, id: nodeEl.dataset.id };
+    }
+
+    function nearestEdgePoint(bbox, px, py) {
+        const cx = bbox.cx, cy = bbox.cy;
+        const dx = px - cx, dy = py - cy;
+        const hw = bbox.w / 2, hh = bbox.h / 2;
+        if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return { x: cx + hw, y: cy };
+        const sx = hw / Math.abs(dx || 1);
+        const sy = hh / Math.abs(dy || 1);
+        const s = Math.min(sx, sy);
+        return { x: cx + dx * s, y: cy + dy * s };
+    }
+
+    function findSnapTarget(px, py, excludeId) {
+        let best = null, bestDist = Infinity;
+        svg.querySelectorAll('g.node[data-id]').forEach(node => {
+            if (node.dataset.id === excludeId) return;
+            const bbox = getNodeBBox(node);
+            if (!bbox) return;
+            const ep = nearestEdgePoint(bbox, px, py);
+            const dist = Math.sqrt((px - ep.x) ** 2 + (py - ep.y) ** 2);
+            if (dist < SNAP_DISTANCE && dist < bestDist) {
+                bestDist = dist;
+                best = { id: bbox.id, point: ep, bbox };
+            }
+        });
+        return best;
+    }
+
+    function showSnapIndicator(x, y) {
+        if (!snapIndicator) {
+            snapIndicator = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            snapIndicator.classList.add('snap-indicator');
+            snapIndicator.setAttribute('r', '8');
+            svg.appendChild(snapIndicator);
+        }
+        snapIndicator.setAttribute('cx', x);
+        snapIndicator.setAttribute('cy', y);
+        snapIndicator.style.display = '';
+    }
+
+    function hideSnapIndicator() {
+        if (snapIndicator) snapIndicator.style.display = 'none';
+    }
+
+    // ========== Auto-detect ungrouped nodes ==========
+    function autoGroupNodes() {
+        const existingNodes = svg.querySelectorAll('g.node[data-id]');
+        if (existingNodes.length > 0) return;
+
+        const allRects = Array.from(svg.querySelectorAll('rect'));
+        const allTexts = Array.from(svg.querySelectorAll('text'));
+
+        const componentRects = allRects.filter(r => {
+            if (r.closest('defs') || r.closest('pattern') || r.closest('.legend')) return false;
+            const w = parseFloat(r.getAttribute('width') || 0);
+            const h = parseFloat(r.getAttribute('height') || 0);
+            const da = r.getAttribute('stroke-dasharray');
+            if (w > 500 || (w === 0 && h === 0)) return false;
+            if (da && w > 200) return false;
+            return w >= 80 && h >= 30;
+        });
+
+        const processed = new Set();
+        const groups = [];
+
+        componentRects.forEach(rect => {
+            if (processed.has(rect)) return;
+            const x = parseFloat(rect.getAttribute('x'));
+            const y = parseFloat(rect.getAttribute('y'));
+            const w = parseFloat(rect.getAttribute('width'));
+            const h = parseFloat(rect.getAttribute('height'));
+            const groupRects = [rect];
+            processed.add(rect);
+
+            componentRects.forEach(other => {
+                if (processed.has(other) || other === rect) return;
+                const ox = parseFloat(other.getAttribute('x'));
+                const oy = parseFloat(other.getAttribute('y'));
+                const ow = parseFloat(other.getAttribute('width'));
+                const oh = parseFloat(other.getAttribute('height'));
+                if (Math.abs(ox - x) < 2 && Math.abs(oy - y) < 2 && Math.abs(ow - w) < 2 && Math.abs(oh - h) < 2) {
+                    groupRects.push(other);
+                    processed.add(other);
+                }
+            });
+
+            const groupTexts = allTexts.filter(t => {
+                if (t.closest('g.node') || t.closest('g.boundary') || t.closest('g.legend') || t.closest('g.connection')) return false;
+                const tx = parseFloat(t.getAttribute('x') || 0);
+                const ty = parseFloat(t.getAttribute('y') || 0);
+                return tx >= x - 5 && tx <= x + w + 5 && ty >= y - 5 && ty <= y + h + 5;
+            });
+
+            groups.push({ rects: groupRects, texts: groupTexts });
+        });
+
+        groups.forEach((group, i) => {
+            const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            g.classList.add('node');
+            g.dataset.id = 'auto-' + i;
+            const firstRect = group.rects[0];
+            firstRect.parentNode.insertBefore(g, firstRect);
+            group.rects.forEach(r => g.appendChild(r));
+            group.texts.forEach(t => g.appendChild(t));
+        });
+
+        autoDetectConnections();
+    }
+
+    function autoDetectConnections() {
+        const existingConns = svg.querySelectorAll('g.connection[data-from]');
+        if (existingConns.length > 0) return;
+
+        const lines = Array.from(svg.querySelectorAll('line')).filter(l => !l.closest('g.node') && !l.closest('g.legend') && !l.closest('g.connection'));
+        const paths = Array.from(svg.querySelectorAll('path')).filter(p => !p.closest('defs') && !p.closest('pattern') && !p.closest('g.node') && !p.closest('g.legend') && !p.closest('g.connection'));
+        const nodes = svg.querySelectorAll('g.node[data-id]');
+
+        function findNearestNode(px, py) {
+            let best = null, bestDist = Infinity;
+            nodes.forEach(node => {
+                const rect = node.querySelector('rect:last-of-type') || node.querySelector('rect');
+                if (!rect) return;
+                const nx = parseFloat(rect.getAttribute('x'));
+                const ny = parseFloat(rect.getAttribute('y'));
+                const nw = parseFloat(rect.getAttribute('width'));
+                const nh = parseFloat(rect.getAttribute('height'));
+                const cx = nx + nw / 2, cy = ny + nh / 2;
+                const edgeDist = Math.min(
+                    Math.abs(px - nx), Math.abs(px - (nx + nw)),
+                    Math.abs(py - ny), Math.abs(py - (ny + nh))
+                );
+                const dist = Math.sqrt((px - cx) ** 2 + (py - cy) ** 2);
+                if (dist < bestDist && edgeDist < 30) {
+                    bestDist = dist;
+                    best = node.dataset.id;
+                }
+            });
+            return best;
+        }
+
+        lines.forEach(line => {
+            const x1 = parseFloat(line.getAttribute('x1'));
+            const y1 = parseFloat(line.getAttribute('y1'));
+            const x2 = parseFloat(line.getAttribute('x2'));
+            const y2 = parseFloat(line.getAttribute('y2'));
+            const fromId = findNearestNode(x1, y1);
+            const toId = findNearestNode(x2, y2);
+            if (fromId || toId) {
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.classList.add('connection');
+                if (fromId) g.dataset.from = fromId;
+                if (toId) g.dataset.to = toId;
+                const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+                const allTexts = Array.from(svg.querySelectorAll('text')).filter(t =>
+                    !t.closest('g.node') && !t.closest('g.boundary') && !t.closest('g.legend') && !t.closest('g.connection')
+                );
+                const labelTexts = allTexts.filter(t => {
+                    const tx = parseFloat(t.getAttribute('x') || 0);
+                    const ty = parseFloat(t.getAttribute('y') || 0);
+                    return Math.abs(tx - mx) < 60 && Math.abs(ty - my) < 25;
+                });
+                line.parentNode.insertBefore(g, line);
+                g.appendChild(line);
+                labelTexts.forEach(t => g.appendChild(t));
+            }
+        });
+
+        paths.forEach(path => {
+            const d = path.getAttribute('d') || '';
+            const coords = d.match(/[-+]?\d*\.?\d+/g);
+            if (!coords || coords.length < 4) return;
+            const sx = parseFloat(coords[0]), sy = parseFloat(coords[1]);
+            const ex = parseFloat(coords[coords.length - 2]), ey = parseFloat(coords[coords.length - 1]);
+            const fromId = findNearestNode(sx, sy);
+            const toId = findNearestNode(ex, ey);
+            if (fromId || toId) {
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.classList.add('connection');
+                if (fromId) g.dataset.from = fromId;
+                if (toId) g.dataset.to = toId;
+                const mx = (sx + ex) / 2, my = (sy + ey) / 2;
+                const allTexts = Array.from(svg.querySelectorAll('text')).filter(t =>
+                    !t.closest('g.node') && !t.closest('g.boundary') && !t.closest('g.legend') && !t.closest('g.connection')
+                );
+                const labelTexts = allTexts.filter(t => {
+                    const tx = parseFloat(t.getAttribute('x') || 0);
+                    const ty = parseFloat(t.getAttribute('y') || 0);
+                    return Math.abs(tx - mx) < 80 && Math.abs(ty - my) < 30;
+                });
+                path.parentNode.insertBefore(g, path);
+                g.appendChild(path);
+                labelTexts.forEach(t => g.appendChild(t));
+            }
+        });
+    }
+
+    autoGroupNodes();
+
+    // ========== Waypoint-based curve system ==========
+    let editOverlay = null;
+    let dragHandleIndex = -1;
+
+    function getConnId(conn) {
+        if (!conn.dataset.connId) {
+            conn.dataset.connId = 'c-' + Math.random().toString(36).slice(2, 8);
+        }
+        return conn.dataset.connId;
+    }
+
+    function getConnByOverlayChild(el) {
+        const cid = el.dataset.connId;
+        return cid ? svg.querySelector(`.connection[data-conn-id="${cid}"]`) : null;
+    }
+
+    // --- Waypoint data model ---
+    function getWaypoints(conn) {
+        const wp = conn.dataset.waypoints;
+        if (wp) {
+            try { return JSON.parse(wp); } catch(e) {}
+        }
+        const path = conn.querySelector('path');
+        if (path) {
+            const d = path.getAttribute('d') || '';
+            const nums = d.match(/[-+]?\d*\.?\d+/g);
+            if (nums && nums.length >= 4) {
+                const pt = getTranslate(path);
+                return [
+                    { x: parseFloat(nums[0]) + pt.x, y: parseFloat(nums[1]) + pt.y },
+                    { x: parseFloat(nums[nums.length - 2]) + pt.x, y: parseFloat(nums[nums.length - 1]) + pt.y }
+                ];
+            }
+        }
+        const line = conn.querySelector('line');
+        if (line) {
+            return [
+                { x: parseFloat(line.getAttribute('x1')), y: parseFloat(line.getAttribute('y1')) },
+                { x: parseFloat(line.getAttribute('x2')), y: parseFloat(line.getAttribute('y2')) }
+            ];
+        }
+        return null;
+    }
+
+    function setWaypoints(conn, points) {
+        conn.dataset.waypoints = JSON.stringify(points);
+        let path = conn.querySelector('path');
+        const line = conn.querySelector('line');
+
+        if (line && !path) {
+            path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('stroke', line.getAttribute('stroke') || '#64748b');
+            path.setAttribute('stroke-width', line.getAttribute('stroke-width') || '1.5');
+            path.setAttribute('fill', 'none');
+            if (line.getAttribute('stroke-dasharray')) path.setAttribute('stroke-dasharray', line.getAttribute('stroke-dasharray'));
+            if (line.getAttribute('marker-end')) path.setAttribute('marker-end', line.getAttribute('marker-end'));
+            line.parentNode.insertBefore(path, line);
+            line.remove();
+        }
+
+        if (path) {
+            path.removeAttribute('transform');
+            path.setAttribute('d', generateCurvePath(points));
+        }
+
+        const first = points[0], last = points[points.length - 1];
+        conn.querySelectorAll('text').forEach(text => {
+            text.setAttribute('x', (first.x + last.x) / 2);
+            text.setAttribute('y', Math.min(first.y, last.y) - 6);
+        });
+
+        syncHandles(conn);
+    }
+
+    // --- Catmull-Rom spline through waypoints ---
+    function generateCurvePath(points) {
+        if (!points || points.length < 2) return '';
+        if (points.length === 2) {
+            const p0 = points[0], p1 = points[1];
+            return `M ${p0.x} ${p0.y} L ${p1.x} ${p1.y}`;
+        }
+
+        const tension = 0.35;
+        let d = `M ${points[0].x} ${points[0].y}`;
+
+        for (let i = 0; i < points.length - 1; i++) {
+            const p0 = points[Math.max(0, i - 1)];
+            const p1 = points[i];
+            const p2 = points[i + 1];
+            const p3 = points[Math.min(points.length - 1, i + 2)];
+
+            const cp1x = p1.x + (p2.x - p0.x) * tension;
+            const cp1y = p1.y + (p2.y - p0.y) * tension;
+            const cp2x = p2.x - (p3.x - p1.x) * tension;
+            const cp2y = p2.y - (p3.y - p1.y) * tension;
+
+            d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+        }
+
+        return d;
+    }
+
+    // --- Add waypoint: find closest segment and insert ---
+    function addWaypointAt(conn, svgX, svgY) {
+        const points = getWaypoints(conn);
+        if (!points || points.length < 2) return;
+
+        let bestIdx = 0, bestDist = Infinity;
+        for (let i = 0; i < points.length - 1; i++) {
+            const d = pointToSegmentDist(svgX, svgY, points[i], points[i + 1]);
+            if (d < bestDist) { bestDist = d; bestIdx = i + 1; }
+        }
+
+        pushUndo();
+        points.splice(bestIdx, 0, { x: svgX, y: svgY });
+        setWaypoints(conn, points);
+    }
+
+    function pointToSegmentDist(px, py, a, b) {
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const len2 = dx * dx + dy * dy;
+        if (len2 === 0) return Math.sqrt((px - a.x) ** 2 + (py - a.y) ** 2);
+        let t = ((px - a.x) * dx + (py - a.y) * dy) / len2;
+        t = Math.max(0, Math.min(1, t));
+        const nx = a.x + t * dx, ny = a.y + t * dy;
+        return Math.sqrt((px - nx) ** 2 + (py - ny) ** 2);
+    }
+
+    // --- Remove middle waypoint ---
+    function removeWaypoint(conn, idx) {
+        const points = getWaypoints(conn);
+        if (!points || points.length <= 2 || idx <= 0 || idx >= points.length - 1) return;
+        pushUndo();
+        points.splice(idx, 1);
+        setWaypoints(conn, points);
+    }
+
+    // --- Overlay handle system ---
+    function addConnHandles() {
+        if (editOverlay) editOverlay.remove();
+        editOverlay = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        editOverlay.classList.add('edit-overlay');
+        svg.appendChild(editOverlay);
+
+        svg.querySelectorAll('.connection').forEach(conn => {
+            const cid = getConnId(conn);
+            const points = getWaypoints(conn);
+            if (!points || points.length < 2) return;
+
+            const path = conn.querySelector('path');
+            if (path) {
+                const hitPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                hitPath.classList.add('conn-hit-area');
+                hitPath.dataset.connId = cid;
+                hitPath.setAttribute('d', path.getAttribute('d'));
+                hitPath.setAttribute('stroke', 'rgba(34,211,238,0.001)');
+                hitPath.setAttribute('stroke-width', '20');
+                hitPath.setAttribute('fill', 'none');
+                hitPath.setAttribute('pointer-events', 'stroke');
+                hitPath.setAttribute('cursor', 'grab');
+                editOverlay.appendChild(hitPath);
+            }
+
+            points.forEach((pt, idx) => {
+                const h = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                h.classList.add('conn-handle');
+                h.dataset.connId = cid;
+                h.dataset.wpIdx = String(idx);
+                h.setAttribute('r', idx === 0 || idx === points.length - 1 ? '6' : '5');
+                h.setAttribute('cx', pt.x);
+                h.setAttribute('cy', pt.y);
+                const isEndpoint = idx === 0 || idx === points.length - 1;
+                h.setAttribute('fill', isEndpoint ? '#22d3ee' : '#fbbf24');
+                h.setAttribute('stroke', '#020617');
+                h.setAttribute('stroke-width', '1.5');
+                h.setAttribute('opacity', isEndpoint ? '0.6' : '0.8');
+                h.setAttribute('pointer-events', 'all');
+                h.setAttribute('cursor', 'crosshair');
+                editOverlay.appendChild(h);
+            });
+        });
+    }
+
+    function removeConnHandles() {
+        if (editOverlay) { editOverlay.remove(); editOverlay = null; }
+    }
+
+    function syncHandles(conn) {
+        if (!editOverlay) return;
+        const cid = conn.dataset.connId;
+        if (!cid) return;
+
+        const points = getWaypoints(conn);
+        if (!points) return;
+
+        const path = conn.querySelector('path');
+        const hitPath = editOverlay.querySelector(`path.conn-hit-area[data-conn-id="${cid}"]`);
+        if (path && hitPath) {
+            hitPath.setAttribute('d', path.getAttribute('d'));
+            hitPath.removeAttribute('transform');
+        }
+
+        const handles = editOverlay.querySelectorAll(`.conn-handle[data-conn-id="${cid}"]`);
+        const handleArr = Array.from(handles);
+
+        if (handleArr.length === points.length) {
+            points.forEach((pt, idx) => {
+                handleArr[idx].setAttribute('cx', pt.x);
+                handleArr[idx].setAttribute('cy', pt.y);
+            });
+        } else {
+            handleArr.forEach(h => h.remove());
+            if (hitPath) hitPath.remove();
+            const p = conn.querySelector('path');
+            if (p) {
+                const newHitPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                newHitPath.classList.add('conn-hit-area');
+                newHitPath.dataset.connId = cid;
+                newHitPath.setAttribute('d', p.getAttribute('d'));
+                newHitPath.setAttribute('stroke', 'rgba(34,211,238,0.001)');
+                newHitPath.setAttribute('stroke-width', '20');
+                newHitPath.setAttribute('fill', 'none');
+                newHitPath.setAttribute('pointer-events', 'stroke');
+                newHitPath.setAttribute('cursor', 'grab');
+                editOverlay.appendChild(newHitPath);
+            }
+            points.forEach((pt, idx) => {
+                const h = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                h.classList.add('conn-handle');
+                h.dataset.connId = cid;
+                h.dataset.wpIdx = String(idx);
+                h.setAttribute('r', idx === 0 || idx === points.length - 1 ? '6' : '5');
+                h.setAttribute('cx', pt.x);
+                h.setAttribute('cy', pt.y);
+                const isEndpoint = idx === 0 || idx === points.length - 1;
+                h.setAttribute('fill', isEndpoint ? '#22d3ee' : '#fbbf24');
+                h.setAttribute('stroke', '#020617');
+                h.setAttribute('stroke-width', '1.5');
+                h.setAttribute('opacity', isEndpoint ? '0.6' : '0.8');
+                h.setAttribute('pointer-events', 'all');
+                h.setAttribute('cursor', 'crosshair');
+                editOverlay.appendChild(h);
+            });
+        }
+    }
+
+    // ========== Coordinate helpers ==========
+    function getSVGPoint(evt) {
+        const pt = svg.createSVGPoint();
+        pt.x = evt.clientX;
+        pt.y = evt.clientY;
+        return pt.matrixTransform(svg.getScreenCTM().inverse());
+    }
+
+    function getTranslate(el) {
+        const t = el.getAttribute('transform');
+        if (!t) return { x: 0, y: 0 };
+        const m = t.match(/translate\(\s*([-\d.]+)[,\s]+([-\d.]+)\s*\)/);
+        return m ? { x: parseFloat(m[1]), y: parseFloat(m[2]) } : { x: 0, y: 0 };
+    }
+
+    // ========== Connection update (when node dragged) ==========
+    function updateConnections(nodeId, dx, dy) {
+        svg.querySelectorAll('.connection').forEach(conn => {
+            const from = conn.dataset.from;
+            const to = conn.dataset.to;
+            if (from !== nodeId && to !== nodeId) return;
+            const points = getWaypoints(conn);
+            if (!points) return;
+            const newPoints = points.map((pt, idx) => {
+                if (idx === 0 && from === nodeId) return { x: pt.x + dx, y: pt.y + dy };
+                if (idx === points.length - 1 && to === nodeId) return { x: pt.x + dx, y: pt.y + dy };
+                return pt;
+            });
+            setWaypoints(conn, newPoints);
+        });
+    }
+
+    // ========== Drag handlers ==========
+    svg.addEventListener('pointerdown', (e) => {
+        if (!editMode) return;
+
+        if (e.target.classList.contains('conn-handle')) {
+            const handle = e.target;
+            const conn = getConnByOverlayChild(handle);
+            if (!conn) return;
+            pushUndo();
+            dragTarget = handle;
+            dragType = 'conn-handle';
+            dragHandleIndex = parseInt(handle.dataset.wpIdx, 10);
+            handle.classList.add('active');
+            svg.setPointerCapture(e.pointerId);
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
+
+        if (e.target.classList.contains('conn-hit-area')) {
+            const conn = getConnByOverlayChild(e.target);
+            if (!conn) return;
+            pushUndo();
+            dragTarget = conn;
+            dragType = 'conn-body';
+            const pos = getSVGPoint(e);
+            dragOffset = { x: pos.x, y: pos.y };
+            svg.setPointerCapture(e.pointerId);
+            e.preventDefault();
+            return;
+        }
+
+        const connGroup = e.target.closest('.connection');
+        const tag = e.target.tagName.toLowerCase();
+        if (connGroup && (tag === 'line' || tag === 'path')) {
+            pushUndo();
+            dragTarget = connGroup;
+            dragType = 'conn-body';
+            const pos = getSVGPoint(e);
+            dragOffset = { x: pos.x, y: pos.y };
+            svg.setPointerCapture(e.pointerId);
+            e.preventDefault();
+            return;
+        }
+
+        const node = e.target.closest('.node');
+        const boundary = e.target.closest('.boundary');
+
+        if (node) {
+            pushUndo();
+            dragTarget = node;
+            dragType = 'node';
+        } else if (boundary) {
+            pushUndo();
+            dragTarget = boundary;
+            dragType = 'boundary';
+        } else {
+            return;
+        }
+
+        const pos = getSVGPoint(e);
+        const t = getTranslate(dragTarget);
+        dragOffset = { x: pos.x - t.x, y: pos.y - t.y };
+        dragTarget.classList.add('dragging');
+        svg.setPointerCapture(e.pointerId);
+        e.preventDefault();
+    });
+
+    svg.addEventListener('pointermove', (e) => {
+        if (!dragTarget) return;
+        e.preventDefault();
+        const pos = getSVGPoint(e);
+
+        if (dragType === 'conn-handle') {
+            const conn = getConnByOverlayChild(dragTarget);
+            if (!conn) return;
+            const points = getWaypoints(conn);
+            if (!points) return;
+            const idx = dragHandleIndex;
+
+            let tx = pos.x, ty = pos.y;
+            const isEndpoint = idx === 0 || idx === points.length - 1;
+
+            if (isEndpoint) {
+                const excludeId = idx === 0 ? conn.dataset.to : conn.dataset.from;
+                const snap = findSnapTarget(tx, ty, excludeId);
+                if (snap) { tx = snap.point.x; ty = snap.point.y; showSnapIndicator(tx, ty); }
+                else { hideSnapIndicator(); }
+            }
+
+            dragTarget.setAttribute('cx', tx);
+            dragTarget.setAttribute('cy', ty);
+
+            points[idx] = { x: tx, y: ty };
+            setWaypoints(conn, points);
+            return;
+        }
+
+        if (dragType === 'conn-body') {
+            const dx = pos.x - dragOffset.x;
+            const dy = pos.y - dragOffset.y;
+            dragOffset = { x: pos.x, y: pos.y };
+            const points = getWaypoints(dragTarget);
+            if (points) {
+                const newPoints = points.map(pt => ({ x: pt.x + dx, y: pt.y + dy }));
+                setWaypoints(dragTarget, newPoints);
+            }
+            return;
+        }
+
+        const newTx = pos.x - dragOffset.x;
+        const newTy = pos.y - dragOffset.y;
+        const prev = getTranslate(dragTarget);
+        const dx = newTx - prev.x;
+        const dy = newTy - prev.y;
+        dragTarget.setAttribute('transform', `translate(${newTx}, ${newTy})`);
+        if (dragType === 'node') updateConnections(dragTarget.dataset.id, dx, dy);
+    });
+
+    svg.addEventListener('pointerup', (e) => {
+        if (!dragTarget) return;
+
+        if (dragType === 'conn-handle') {
+            const conn = getConnByOverlayChild(dragTarget);
+            if (conn) {
+                const points = getWaypoints(conn);
+                const idx = dragHandleIndex;
+                if (points && (idx === 0 || idx === points.length - 1)) {
+                    const px = parseFloat(dragTarget.getAttribute('cx'));
+                    const py = parseFloat(dragTarget.getAttribute('cy'));
+                    const excludeId = idx === 0 ? conn.dataset.to : conn.dataset.from;
+                    const snap = findSnapTarget(px, py, excludeId);
+                    if (snap) {
+                        if (idx === 0) conn.dataset.from = snap.id;
+                        else conn.dataset.to = snap.id;
+                        points[idx] = { x: snap.point.x, y: snap.point.y };
+                        setWaypoints(conn, points);
+                    }
+                }
+            }
+            dragTarget.classList.remove('active');
+            hideSnapIndicator();
+        }
+
+        if (dragTarget.classList) dragTarget.classList.remove('dragging');
+        svg.releasePointerCapture(e.pointerId);
+        dragTarget = null;
+        dragType = null;
+        dragHandleIndex = -1;
+    });
+
+    // ========== Double-click: add/remove waypoints ==========
+    svg.addEventListener('dblclick', (e) => {
+        if (!editMode) return;
+
+        if (e.target.classList.contains('conn-handle')) {
+            const conn = getConnByOverlayChild(e.target);
+            if (!conn) return;
+            const idx = parseInt(e.target.dataset.wpIdx, 10);
+            removeWaypoint(conn, idx);
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
+
+        if (e.target.classList.contains('conn-hit-area')) {
+            const conn = getConnByOverlayChild(e.target);
+            if (!conn) return;
+            const pos = getSVGPoint(e);
+            addWaypointAt(conn, pos.x, pos.y);
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
+
+        const connGroup = e.target.closest('.connection');
+        if (connGroup) {
+            const pos = getSVGPoint(e);
+            addWaypointAt(connGroup, pos.x, pos.y);
+            e.preventDefault();
+            e.stopPropagation();
+        }
+    });
+
+    // ========== Toolbar toggle ==========
+    fab.addEventListener('click', () => {
+        const open = panel.classList.toggle('visible');
+        fab.classList.toggle('open', open);
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!fab.contains(e.target) && !panel.contains(e.target)) {
+            panel.classList.remove('visible');
+            fab.classList.remove('open');
+        }
+    });
+
+    // ========== Toggle edit mode ==========
+    editBtn.addEventListener('click', () => {
+        editMode = !editMode;
+        editBtn.textContent = editMode ? 'Lock' : 'Edit';
+        editBtn.classList.toggle('active', editMode);
+        svg.classList.toggle('edit-mode', editMode);
+        hint.textContent = editMode
+            ? 'Dbl-click curve=add point, dbl-click point=remove'
+            : '';
+        hint.classList.toggle('visible', editMode);
+
+        if (editMode) {
+            undoStack = [];
+            addConnHandles();
+        } else {
+            removeConnHandles();
+            hideSnapIndicator();
+        }
+    });
+
+    // ========== Export PNG (full page via Canvas 2D) ==========
+    function loadImage(url) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = url;
+        });
+    }
+
+    function drawRoundRect(ctx, x, y, w, h, r, fill, stroke) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+        if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
+    }
+
+    exportBtn.addEventListener('click', async () => {
+        exportBtn.textContent = 'Exporting...';
+        exportBtn.disabled = true;
+
+        try {
+            await document.fonts.ready;
+
+            // 1. Render SVG diagram to image
+            const svgClone = svg.cloneNode(true);
+            svgClone.querySelectorAll('.edit-overlay, .snap-indicator').forEach(el => el.remove());
+            svgClone.classList.remove('edit-mode');
+
+            try {
+                const resp = await fetch('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+                let fontCSS = await resp.text();
+                for (const [, rawUrl] of [...fontCSS.matchAll(/url\(([^)]+)\)/g)]) {
+                    const url = rawUrl.replace(/['"]/g, '');
+                    try {
+                        const buf = await (await fetch(url)).arrayBuffer();
+                        const bytes = new Uint8Array(buf);
+                        let bin = '';
+                        for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+                        const ext = url.includes('woff2') ? 'woff2' : 'woff';
+                        fontCSS = fontCSS.replace(rawUrl, `"data:font/${ext};base64,${btoa(bin)}"`);
+                    } catch(e) {}
+                }
+                const s = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+                s.textContent = fontCSS;
+                svgClone.insertBefore(s, svgClone.firstChild);
+            } catch(e) {}
+
+            const svgStr = new XMLSerializer().serializeToString(svgClone);
+            const svgUrl = URL.createObjectURL(new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' }));
+            const svgImg = await loadImage(svgUrl);
+            URL.revokeObjectURL(svgUrl);
+
+            // 2. Read page content
+            const titleText = document.querySelector('h1')?.textContent || '';
+            const subtitleText = document.querySelector('.subtitle')?.textContent || '';
+            const footerText = document.querySelector('.footer')?.textContent?.trim() || '';
+            const cards = document.querySelectorAll('.card');
+
+            // 3. Layout
+            const vb = svg.viewBox.baseVal;
+            const W = vb.width || 1000;
+            const diagH = vb.height || 680;
+            const pad = 40;
+            const headerH = 70;
+            const gap = 28;
+            const cardH = cards.length ? 130 : 0;
+            const footerH = footerText ? 45 : 0;
+            const totalW = W + pad * 2;
+            const totalH = pad + headerH + diagH + (cardH ? gap + cardH : 0) + (footerH ? gap + footerH : 0) + pad;
+
+            const scale = 2;
+            const canvas = document.createElement('canvas');
+            canvas.width = totalW * scale;
+            canvas.height = totalH * scale;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(scale, scale);
+
+            // 4. Background
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(0, 0, totalW, totalH);
+
+            const F = "'JetBrains Mono', monospace";
+            let y = pad;
+
+            // 5. Header
+            ctx.fillStyle = '#22d3ee';
+            ctx.beginPath(); ctx.arc(pad + 6, y + 10, 6, 0, Math.PI * 2); ctx.fill();
+            ctx.font = `700 18px ${F}`; ctx.fillStyle = '#fff';
+            ctx.fillText(titleText, pad + 22, y + 16);
+            ctx.font = `400 11px ${F}`; ctx.fillStyle = '#94a3b8';
+            ctx.fillText(subtitleText, pad + 22, y + 38);
+            y += headerH;
+
+            // 6. Diagram container
+            drawRoundRect(ctx, pad - 14, y - 14, W + 28, diagH + 28, 16, 'rgba(15,23,42,0.5)', '#1e293b');
+            ctx.drawImage(svgImg, pad, y, W, diagH);
+            y += diagH;
+
+            // 7. Cards
+            if (cards.length) {
+                y += gap;
+                const cardCount = cards.length;
+                const cardGap = 14;
+                const cardW = (W - (cardCount - 1) * cardGap) / cardCount;
+                cards.forEach((card, i) => {
+                    const cx = pad + i * (cardW + cardGap);
+                    drawRoundRect(ctx, cx, y, cardW, cardH, 12, 'rgba(15,23,42,0.5)', '#1e293b');
+
+                    const dot = card.querySelector('.card-dot');
+                    const cls = dot?.className || '';
+                    const color = cls.includes('emerald') ? '#34d399' : cls.includes('violet') ? '#a78bfa'
+                        : cls.includes('amber') ? '#fbbf24' : cls.includes('rose') ? '#fb7185' : '#22d3ee';
+                    ctx.fillStyle = color;
+                    ctx.beginPath(); ctx.arc(cx + 18, y + 20, 4, 0, Math.PI * 2); ctx.fill();
+
+                    ctx.font = `600 11px ${F}`; ctx.fillStyle = '#fff';
+                    ctx.fillText(card.querySelector('h3')?.textContent || '', cx + 30, y + 24);
+
+                    ctx.font = `400 10px ${F}`; ctx.fillStyle = '#94a3b8';
+                    card.querySelectorAll('li').forEach((li, j) => {
+                        ctx.fillText(li.textContent, cx + 18, y + 46 + j * 18);
+                    });
+                });
+                y += cardH;
+            }
+
+            // 8. Footer
+            if (footerText) {
+                y += gap;
+                ctx.font = `400 10px ${F}`; ctx.fillStyle = '#475569'; ctx.textAlign = 'center';
+                ctx.fillText(footerText, totalW / 2, y + 6);
+                ctx.textAlign = 'start';
+            }
+
+            // 9. Download
+            canvas.toBlob(blob => {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                const title = document.title || 'architecture-diagram';
+                a.download = title.replace(/[^a-zA-Z0-9一-鿿]+/g, '-').toLowerCase() + '.png';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(a.href);
+            }, 'image/png');
+
+        } catch(e) {
+            console.error('Export failed:', e);
+            alert('Export failed: ' + e.message);
+        }
+
+        exportBtn.textContent = 'Export PNG';
+        exportBtn.disabled = false;
+    });
+
+    // ========== Save HTML ==========
+    saveBtn.addEventListener('click', () => {
+        svg.classList.remove('edit-mode');
+        editBtn.classList.remove('active');
+        editMode = false;
+        editBtn.textContent = 'Edit';
+        hint.textContent = '';
+        hint.classList.remove('visible');
+
+        removeConnHandles();
+        hideSnapIndicator();
+        svg.querySelectorAll('.dragging').forEach(el => el.classList.remove('dragging'));
+        svg.querySelectorAll('[data-conn-id]').forEach(el => delete el.dataset.connId);
+        if (snapIndicator) { snapIndicator.remove(); snapIndicator = null; }
+
+        panel.classList.remove('visible');
+        fab.classList.remove('open');
+
+        const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const title = document.title || 'architecture-diagram';
+        a.download = title.replace(/[^a-zA-Z0-9一-鿿]+/g, '-').toLowerCase() + '.html';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    });
+
+    // ========== Reset ==========
+    resetBtn.addEventListener('click', () => {
+        if (confirm('Reset all adjustments?')) {
+            svg.innerHTML = initialState;
+            svg.classList.remove('edit-mode');
+            editMode = false;
+            editBtn.textContent = 'Edit';
+            editBtn.classList.remove('active');
+            hint.textContent = '';
+            hint.classList.remove('visible');
+            undoStack = [];
+            snapIndicator = null;
+            editOverlay = null;
+            autoGroupNodes();
+        }
+    });
+})();
+</script>
+</body>
+</html>
