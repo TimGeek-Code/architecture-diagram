@@ -1245,26 +1245,14 @@
             const textY = pos.y - dragOffset.y;
             const points = getWaypoints(dragTarget);
             if (points) {
-                const SNAP_DIST = 15;
                 const t = closestTOnCurve(points, textX, textY);
                 const curvePt = pointOnCurveAt(points, t);
-                const dist = Math.hypot(curvePt.x - textX, curvePt.y - textY);
                 dragTarget.dataset.labelT = t.toFixed(4);
-                let finalX, finalY;
-                if (dist < SNAP_DIST) {
-                    finalX = curvePt.x;
-                    finalY = curvePt.y - 8;
-                    dragTarget.dataset.labelOx = '0';
-                    dragTarget.dataset.labelOy = '-8';
-                } else {
-                    finalX = textX;
-                    finalY = textY;
-                    dragTarget.dataset.labelOx = (textX - curvePt.x).toFixed(1);
-                    dragTarget.dataset.labelOy = (textY - curvePt.y).toFixed(1);
-                }
+                dragTarget.dataset.labelOx = (textX - curvePt.x).toFixed(1);
+                dragTarget.dataset.labelOy = (textY - curvePt.y).toFixed(1);
                 dragTarget.querySelectorAll('text').forEach(text => {
-                    text.setAttribute('x', finalX);
-                    text.setAttribute('y', finalY);
+                    text.setAttribute('x', textX);
+                    text.setAttribute('y', textY);
                 });
             }
             return;
@@ -1436,23 +1424,37 @@
             const svgImg = await loadImage(svgUrl);
             URL.revokeObjectURL(svgUrl);
 
-            // 2. Read page content
-            const titleText = document.querySelector('h1')?.textContent || '';
-            const subtitleText = document.querySelector('.subtitle')?.textContent || '';
-            const footerText = document.querySelector('.footer')?.textContent?.trim() || '';
+            function fillTextWrap(ctx, text, x, y, maxW, lineH) {
+                const words = text.split('');
+                let line = '';
+                for (let i = 0; i < words.length; i++) {
+                    const test = line + words[i];
+                    if (ctx.measureText(test).width > maxW && line.length > 0) {
+                        ctx.fillText(line, x, y);
+                        line = words[i];
+                        y += lineH;
+                    } else {
+                        line = test;
+                    }
+                }
+                if (line) ctx.fillText(line, x, y);
+                return y;
+            }
+
+            // 2. Read DOM layout
+            const container = document.querySelector('.container');
+            const containerR = container.getBoundingClientRect();
+            const headerEl = document.querySelector('.header');
+            const diagContainer = document.querySelector('.diagram-container');
+            const cardsEl = document.querySelector('.cards');
+            const footerEl = document.querySelector('.footer');
             const cards = document.querySelectorAll('.card');
 
-            // 3. Layout
-            const vb = svg.viewBox.baseVal;
-            const W = vb.width || 1000;
-            const diagH = vb.height || 680;
-            const pad = 40;
-            const headerH = 70;
-            const gap = 28;
-            const cardH = cards.length ? 130 : 0;
-            const footerH = footerText ? 45 : 0;
-            const totalW = W + pad * 2;
-            const totalH = pad + headerH + diagH + (cardH ? gap + cardH : 0) + (footerH ? gap + footerH : 0) + pad;
+            const bodyPad = parseFloat(getComputedStyle(document.body).padding) || 32;
+            const totalW = containerR.width + bodyPad * 2;
+            const totalH = containerR.height + bodyPad * 2;
+            const ox = containerR.left - bodyPad;
+            const oy = containerR.top - bodyPad;
 
             const scale = 2;
             const canvas = document.createElement('canvas');
@@ -1461,60 +1463,92 @@
             const ctx = canvas.getContext('2d');
             ctx.scale(scale, scale);
 
-            // 4. Background
             ctx.fillStyle = '#020617';
             ctx.fillRect(0, 0, totalW, totalH);
 
             const F = "'JetBrains Mono', monospace";
-            let y = pad;
 
-            // 5. Header
-            ctx.fillStyle = '#22d3ee';
-            ctx.beginPath(); ctx.arc(pad + 6, y + 10, 6, 0, Math.PI * 2); ctx.fill();
-            ctx.font = `700 18px ${F}`; ctx.fillStyle = '#fff';
-            ctx.fillText(titleText, pad + 22, y + 16);
-            ctx.font = `400 11px ${F}`; ctx.fillStyle = '#94a3b8';
-            ctx.fillText(subtitleText, pad + 22, y + 38);
-            y += headerH;
-
-            // 6. Diagram container
-            drawRoundRect(ctx, pad - 14, y - 14, W + 28, diagH + 28, 16, 'rgba(15,23,42,0.5)', '#1e293b');
-            ctx.drawImage(svgImg, pad, y, W, diagH);
-            y += diagH;
-
-            // 7. Cards
-            if (cards.length) {
-                y += gap;
-                const cardCount = cards.length;
-                const cardGap = 14;
-                const cardW = (W - (cardCount - 1) * cardGap) / cardCount;
-                cards.forEach((card, i) => {
-                    const cx = pad + i * (cardW + cardGap);
-                    drawRoundRect(ctx, cx, y, cardW, cardH, 12, 'rgba(15,23,42,0.5)', '#1e293b');
-
-                    const dot = card.querySelector('.card-dot');
-                    const cls = dot?.className || '';
-                    const color = cls.includes('emerald') ? '#34d399' : cls.includes('violet') ? '#a78bfa'
-                        : cls.includes('amber') ? '#fbbf24' : cls.includes('rose') ? '#fb7185' : '#22d3ee';
-                    ctx.fillStyle = color;
-                    ctx.beginPath(); ctx.arc(cx + 18, y + 20, 4, 0, Math.PI * 2); ctx.fill();
-
-                    ctx.font = `600 11px ${F}`; ctx.fillStyle = '#fff';
-                    ctx.fillText(card.querySelector('h3')?.textContent || '', cx + 30, y + 24);
-
-                    ctx.font = `400 10px ${F}`; ctx.fillStyle = '#94a3b8';
-                    card.querySelectorAll('li').forEach((li, j) => {
-                        ctx.fillText(li.textContent, cx + 18, y + 46 + j * 18);
-                    });
-                });
-                y += cardH;
+            // Header
+            if (headerEl) {
+                const hr = headerEl.getBoundingClientRect();
+                const hx = hr.left - ox, hy = hr.top - oy;
+                const dot = headerEl.querySelector('.pulse-dot');
+                if (dot) {
+                    const dr = dot.getBoundingClientRect();
+                    ctx.fillStyle = '#22d3ee';
+                    ctx.beginPath(); ctx.arc(dr.left - ox + dr.width/2, dr.top - oy + dr.height/2, 6, 0, Math.PI*2); ctx.fill();
+                }
+                const h1 = headerEl.querySelector('h1');
+                if (h1) {
+                    const h1r = h1.getBoundingClientRect();
+                    const fs = parseFloat(getComputedStyle(h1).fontSize);
+                    ctx.font = `700 ${fs}px ${F}`; ctx.fillStyle = '#fff';
+                    ctx.fillText(h1.textContent, h1r.left - ox, h1r.top - oy + fs);
+                }
+                const sub = headerEl.querySelector('.subtitle');
+                if (sub) {
+                    const sr = sub.getBoundingClientRect();
+                    const fs = parseFloat(getComputedStyle(sub).fontSize);
+                    ctx.font = `400 ${fs}px ${F}`; ctx.fillStyle = '#94a3b8';
+                    ctx.fillText(sub.textContent, sr.left - ox, sr.top - oy + fs);
+                }
             }
 
-            // 8. Footer
-            if (footerText) {
-                y += gap;
-                ctx.font = `400 10px ${F}`; ctx.fillStyle = '#475569'; ctx.textAlign = 'center';
-                ctx.fillText(footerText, totalW / 2, y + 6);
+            // Diagram
+            if (diagContainer) {
+                const dr = diagContainer.getBoundingClientRect();
+                const dx = dr.left - ox, dy = dr.top - oy;
+                drawRoundRect(ctx, dx, dy, dr.width, dr.height, 16, 'rgba(15,23,42,0.5)', '#1e293b');
+                const svgR = svg.getBoundingClientRect();
+                ctx.drawImage(svgImg, svgR.left - ox, svgR.top - oy, svgR.width, svgR.height);
+            }
+
+            // Cards
+            if (cards.length) {
+                cards.forEach(card => {
+                    const cr = card.getBoundingClientRect();
+                    const cx = cr.left - ox, cy = cr.top - oy;
+                    drawRoundRect(ctx, cx, cy, cr.width, cr.height, 12, 'rgba(15,23,42,0.5)', '#1e293b');
+
+                    const dot = card.querySelector('.card-dot');
+                    if (dot) {
+                        const dr = dot.getBoundingClientRect();
+                        const cls = dot.className || '';
+                        const color = cls.includes('emerald') ? '#34d399' : cls.includes('violet') ? '#a78bfa'
+                            : cls.includes('amber') ? '#fbbf24' : cls.includes('rose') ? '#fb7185' : '#22d3ee';
+                        ctx.fillStyle = color;
+                        ctx.beginPath(); ctx.arc(dr.left - ox + dr.width/2, dr.top - oy + dr.height/2, 4, 0, Math.PI*2); ctx.fill();
+                    }
+
+                    const h3 = card.querySelector('h3');
+                    if (h3) {
+                        const h3r = h3.getBoundingClientRect();
+                        const fs = parseFloat(getComputedStyle(h3).fontSize);
+                        ctx.font = `600 ${fs}px ${F}`; ctx.fillStyle = '#fff';
+                        ctx.fillText(h3.textContent, h3r.left - ox, h3r.top - oy + fs);
+                    }
+
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.rect(cx, cy, cr.width, cr.height);
+                    ctx.clip();
+                    const liPadRight = 14;
+                    card.querySelectorAll('li').forEach(li => {
+                        const lr = li.getBoundingClientRect();
+                        const fs = parseFloat(getComputedStyle(li).fontSize);
+                        ctx.font = `400 ${fs}px ${F}`; ctx.fillStyle = '#94a3b8';
+                        fillTextWrap(ctx, li.textContent, lr.left - ox, lr.top - oy + fs, cr.width - (lr.left - cr.left) - liPadRight, fs + 4);
+                    });
+                    ctx.restore();
+                });
+            }
+
+            // Footer
+            if (footerEl) {
+                const fr = footerEl.getBoundingClientRect();
+                const fs = parseFloat(getComputedStyle(footerEl).fontSize);
+                ctx.font = `400 ${fs}px ${F}`; ctx.fillStyle = '#475569'; ctx.textAlign = 'center';
+                ctx.fillText(footerEl.textContent.trim(), fr.left - ox + fr.width/2, fr.top - oy + fs);
                 ctx.textAlign = 'start';
             }
 
