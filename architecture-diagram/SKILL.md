@@ -4,7 +4,7 @@ description: Create professional, dark-themed architecture diagrams as standalon
 license: MIT
 metadata:
   version: "1.1"
-  author: Tim Geek (winnerku.liu@gmail.com)
+  author: TimGeek (winnerku.liu@gmail.com)
 ---
 
 # Architecture Diagram Skill
@@ -163,7 +163,7 @@ Users can add/remove curve control points interactively in edit mode (double-cli
 
 **Legend** — wrap in `<g class="legend">`.
 
-**SVG draw order:** connections first (behind), then boundaries, then nodes (in front), then legend.
+**SVG draw order:** boundaries first (largest area at the very back, smallest in front of larger ones), then connections, then nodes (in front), then legend. The JS `sortBoundariesBySize()` function auto-sorts at runtime, but the static HTML should follow this order too.
 
 The `data-id` values should be short, descriptive kebab-case identifiers (e.g., `api-server`, `user-db`, `auth-provider`). The `data-from`/`data-to` values on connections must match the `data-id` of their source/target nodes.
 
@@ -213,4 +213,4 @@ Always produce a single self-contained `.html` file with:
 - The floating toolbar (hidden behind a ⋮ icon), CSS styles, and JS from `assets/template.html` must be included verbatim
 - The toolbar is hidden by default so the page is screenshot-friendly
 
-The file should render correctly when opened directly in any modern browser. Users can click "Edit" to enter edit mode, drag nodes to fix overlaps or adjust layout, and click "Save" to download the adjusted version.
+The file should render correctly when opened directly in any modern browser. Users can click "Edit" to enter edit mode, drag nodes to fix overlaps or adjust layout, drag connection labels freely (snap to curve when close), double-click connections to add/remove waypoints, and click "Save" to download the adjusted version.

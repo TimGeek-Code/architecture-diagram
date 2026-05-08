@@ -197,6 +197,11 @@
             pointer-events: none;
         }
 
+        /* Connection label drag */
+        svg.edit-mode .connection text {
+            cursor: grab;
+        }
+
         /* Hover highlight on connections */
         svg.edit-mode .connection:hover path {
             filter: brightness(1.5);
@@ -528,9 +533,10 @@
 
     let editMode = false;
     let dragTarget = null;
-    let dragType = null; // 'node', 'boundary', 'conn-handle', 'conn-body'
+    let dragType = null; // 'node', 'boundary', 'conn-handle', 'conn-body', 'conn-label'
     let dragOffset = { x: 0, y: 0 };
     let dragConnLine = null;
+    let dragMoved = false;
     let initialState = null;
     let snapIndicator = null;
 
@@ -772,6 +778,26 @@
 
     autoGroupNodes();
 
+    function sortBoundariesBySize() {
+        const boundaries = Array.from(svg.querySelectorAll('g.boundary'));
+        if (boundaries.length === 0) return;
+        boundaries.sort((a, b) => {
+            const ra = a.querySelector('rect');
+            const rb = b.querySelector('rect');
+            const areaA = ra ? parseFloat(ra.getAttribute('width') || 0) * parseFloat(ra.getAttribute('height') || 0) : 0;
+            const areaB = rb ? parseFloat(rb.getAttribute('width') || 0) * parseFloat(rb.getAttribute('height') || 0) : 0;
+            return areaB - areaA;
+        });
+        const nonBg = Array.from(svg.children).find(el =>
+            el.tagName !== 'defs' && el.tagName !== 'rect' && el.tagName !== 'pattern'
+            && !el.classList.contains('boundary')
+        );
+        boundaries.forEach(b => {
+            if (nonBg) svg.insertBefore(b, nonBg);
+            else svg.appendChild(b);
+        });
+    }
+
     // ========== Waypoint-based curve system ==========
     let editOverlay = null;
     let dragHandleIndex = -1;
@@ -837,10 +863,14 @@
             path.setAttribute('d', generateCurvePath(points));
         }
 
-        const first = points[0], last = points[points.length - 1];
+        const labelT = parseFloat(conn.dataset.labelT || '0.5');
+        const labelPt = pointOnCurveAt(points, labelT);
+        const ox = parseFloat(conn.dataset.labelOx || '0');
+        const oy = parseFloat(conn.dataset.labelOy || '-8');
         conn.querySelectorAll('text').forEach(text => {
-            text.setAttribute('x', (first.x + last.x) / 2);
-            text.setAttribute('y', Math.min(first.y, last.y) - 6);
+            text.removeAttribute('transform');
+            text.setAttribute('x', labelPt.x + ox);
+            text.setAttribute('y', labelPt.y + oy);
         });
 
         syncHandles(conn);
@@ -872,6 +902,42 @@
         }
 
         return d;
+    }
+
+    function pointOnCurveAt(points, t) {
+        if (!points || points.length < 2) return { x: 0, y: 0 };
+        if (points.length === 2) {
+            return { x: points[0].x + (points[1].x - points[0].x) * t, y: points[0].y + (points[1].y - points[0].y) * t };
+        }
+        const segs = points.length - 1;
+        const seg = Math.min(Math.floor(t * segs), segs - 1);
+        const lt = t * segs - seg;
+        const tension = 0.35;
+        const p0 = points[Math.max(0, seg - 1)];
+        const p1 = points[seg];
+        const p2 = points[seg + 1];
+        const p3 = points[Math.min(points.length - 1, seg + 2)];
+        const cp1x = p1.x + (p2.x - p0.x) * tension;
+        const cp1y = p1.y + (p2.y - p0.y) * tension;
+        const cp2x = p2.x - (p3.x - p1.x) * tension;
+        const cp2y = p2.y - (p3.y - p1.y) * tension;
+        const u = 1 - lt;
+        return {
+            x: u*u*u*p1.x + 3*u*u*lt*cp1x + 3*u*lt*lt*cp2x + lt*lt*lt*p2.x,
+            y: u*u*u*p1.y + 3*u*u*lt*cp1y + 3*u*lt*lt*cp2y + lt*lt*lt*p2.y
+        };
+    }
+
+    function closestTOnCurve(points, px, py) {
+        let bestT = 0.5, bestDist = Infinity;
+        const steps = 200;
+        for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const pt = pointOnCurveAt(points, t);
+            const d = (pt.x - px) ** 2 + (pt.y - py) ** 2;
+            if (d < bestDist) { bestDist = d; bestT = t; }
+        }
+        return bestT;
     }
 
     // --- Add waypoint: find closest segment and insert ---
@@ -1061,6 +1127,7 @@
             pushUndo();
             dragTarget = handle;
             dragType = 'conn-handle';
+            dragMoved = false;
             dragHandleIndex = parseInt(handle.dataset.wpIdx, 10);
             handle.classList.add('active');
             svg.setPointerCapture(e.pointerId);
@@ -1069,29 +1136,35 @@
             return;
         }
 
+        if (e.target.tagName === 'text' && e.target.closest('.connection')) {
+            const conn = e.target.closest('.connection');
+            dragTarget = conn;
+            dragType = 'conn-label';
+            dragMoved = false;
+            const pos = getSVGPoint(e);
+            dragOffset = { x: pos.x - parseFloat(e.target.getAttribute('x')), y: pos.y - parseFloat(e.target.getAttribute('y')) };
+            return;
+        }
+
         if (e.target.classList.contains('conn-hit-area')) {
             const conn = getConnByOverlayChild(e.target);
             if (!conn) return;
-            pushUndo();
             dragTarget = conn;
             dragType = 'conn-body';
+            dragMoved = false;
             const pos = getSVGPoint(e);
             dragOffset = { x: pos.x, y: pos.y };
-            svg.setPointerCapture(e.pointerId);
-            e.preventDefault();
             return;
         }
 
         const connGroup = e.target.closest('.connection');
         const tag = e.target.tagName.toLowerCase();
         if (connGroup && (tag === 'line' || tag === 'path')) {
-            pushUndo();
             dragTarget = connGroup;
             dragType = 'conn-body';
+            dragMoved = false;
             const pos = getSVGPoint(e);
             dragOffset = { x: pos.x, y: pos.y };
-            svg.setPointerCapture(e.pointerId);
-            e.preventDefault();
             return;
         }
 
@@ -1123,7 +1196,14 @@
         e.preventDefault();
         const pos = getSVGPoint(e);
 
+        if (!dragMoved && (dragType === 'conn-body' || dragType === 'conn-label')) {
+            pushUndo();
+            dragMoved = true;
+            svg.setPointerCapture(e.pointerId);
+        }
+
         if (dragType === 'conn-handle') {
+            dragMoved = true;
             const conn = getConnByOverlayChild(dragTarget);
             if (!conn) return;
             const points = getWaypoints(conn);
@@ -1156,6 +1236,36 @@
             if (points) {
                 const newPoints = points.map(pt => ({ x: pt.x + dx, y: pt.y + dy }));
                 setWaypoints(dragTarget, newPoints);
+            }
+            return;
+        }
+
+        if (dragType === 'conn-label') {
+            const textX = pos.x - dragOffset.x;
+            const textY = pos.y - dragOffset.y;
+            const points = getWaypoints(dragTarget);
+            if (points) {
+                const SNAP_DIST = 15;
+                const t = closestTOnCurve(points, textX, textY);
+                const curvePt = pointOnCurveAt(points, t);
+                const dist = Math.hypot(curvePt.x - textX, curvePt.y - textY);
+                dragTarget.dataset.labelT = t.toFixed(4);
+                let finalX, finalY;
+                if (dist < SNAP_DIST) {
+                    finalX = curvePt.x;
+                    finalY = curvePt.y - 8;
+                    dragTarget.dataset.labelOx = '0';
+                    dragTarget.dataset.labelOy = '-8';
+                } else {
+                    finalX = textX;
+                    finalY = textY;
+                    dragTarget.dataset.labelOx = (textX - curvePt.x).toFixed(1);
+                    dragTarget.dataset.labelOy = (textY - curvePt.y).toFixed(1);
+                }
+                dragTarget.querySelectorAll('text').forEach(text => {
+                    text.setAttribute('x', finalX);
+                    text.setAttribute('y', finalY);
+                });
             }
             return;
         }
@@ -1198,6 +1308,7 @@
         svg.releasePointerCapture(e.pointerId);
         dragTarget = null;
         dragType = null;
+        dragMoved = false;
         dragHandleIndex = -1;
     });
 
@@ -1473,6 +1584,7 @@
             snapIndicator = null;
             editOverlay = null;
             autoGroupNodes();
+            sortBoundariesBySize();
         }
     });
 })();
